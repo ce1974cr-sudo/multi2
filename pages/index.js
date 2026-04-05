@@ -11,13 +11,21 @@ import {
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
 import 'chartjs-adapter-date-fns';
+import Header from '../components/Header';
+import Button from '../components/Button';
+import Input from '../components/Input';
+import Select from '../components/Select';
+import Card from '../components/Card';
+import Stats from '../components/Stats';
+import UserList from '../components/UserList';
+import ActivityList from '../components/ActivityList';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend, TimeScale);
 
 export default function Home() {
-  const [users, setUsers] = useState([]);               // [{name}]
-  const [currentUser, setCurrentUser] = useState('');   // string name
-  const [activities, setActivities] = useState([]);     // [{id, date, activity, minutes, calories}]
+  const [users, setUsers] = useState([]);
+  const [currentUser, setCurrentUser] = useState('');
+  const [activities, setActivities] = useState([]);
   const [activity, setActivity] = useState('');
   const [minutes, setMinutes] = useState('');
   const [weight, setWeight] = useState('');
@@ -25,8 +33,9 @@ export default function Home() {
   const [date, setDate] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [newUserName, setNewUserName] = useState('');
 
-  // carregar lista de usuários e usuário corrente
+  // Carregar lista de usuários e usuário corrente
   useEffect(() => {
     const savedUsers = JSON.parse(localStorage.getItem('users')) || [];
     setUsers(savedUsers);
@@ -34,7 +43,7 @@ export default function Home() {
     setCurrentUser(savedCurrentUser);
   }, []);
 
-  // carregar atividades do usuário selecionado
+  // Carregar atividades do usuário selecionado
   useEffect(() => {
     if (!currentUser) {
       setActivities([]);
@@ -42,48 +51,50 @@ export default function Home() {
     }
     const data = JSON.parse(localStorage.getItem(currentUser) || '[]');
     setActivities(Array.isArray(data) ? data : []);
-    // carregar peso/altura salvos (se desejar manter persistência separada)
     const profile = JSON.parse(localStorage.getItem(`${currentUser}_profile`) || '{}');
     if (profile.weight) setWeight(profile.weight);
     if (profile.height) setHeight(profile.height);
   }, [currentUser]);
 
-  // salvar perfil do usuário (peso/altura)
+  // Salvar perfil do usuário
   useEffect(() => {
     if (!currentUser) return;
     const profile = { weight, height };
     localStorage.setItem(`${currentUser}_profile`, JSON.stringify(profile));
   }, [currentUser, weight, height]);
 
-  // função utilitária: calcular calorias (fórmula simples)
+  // Calcular calorias
   const calculateCalories = (activityType, minutesVal, weightKg) => {
     const w = parseFloat(weightKg) || 70;
     const m = parseFloat(minutesVal) || 0;
     const METS = { Padel: 7, 'Musculação': 6, Corrida: 10 };
     const met = METS[activityType] || 6;
-    // fórmula aproximada: kcal = (MET * peso (kg) * tempo(h))
     return Math.round(met * w * (m / 60));
   };
 
-  // criar usuário (simples)
+  // Criar usuário
   const addUser = (name) => {
     const nm = (name || '').trim();
-    if (!nm) return alert('Digite um nome válido');
+    if (!nm) {
+      alert('Digite um nome válido');
+      return;
+    }
     if (users.some(u => u.name === nm)) {
       setCurrentUser(nm);
       localStorage.setItem('currentUser', nm);
+      setNewUserName('');
       return;
     }
     const newUsers = [...users, { name: nm }];
     setUsers(newUsers);
     localStorage.setItem('users', JSON.stringify(newUsers));
-    // inicializa storage do usuário
     localStorage.setItem(nm, JSON.stringify([]));
     localStorage.setItem('currentUser', nm);
     setCurrentUser(nm);
+    setNewUserName('');
   };
 
-  // excluir usuário (remove dados e da lista)
+  // Excluir usuário
   const deleteUser = (name) => {
     if (!confirm(`Deseja excluir o usuário "${name}" e todos os dados locais?`)) return;
     const updated = users.filter(u => u.name !== name);
@@ -97,21 +108,26 @@ export default function Home() {
     }
   };
 
-  // adicionar atividade (salva em localStorage por usuário)
+  // Adicionar atividade
   const handleAddActivity = () => {
-    if (!currentUser) return alert('Selecione um usuário');
-    if (!activity || !minutes || !date) return alert('Preencha atividade, minutos e data.');
+    if (!currentUser) {
+      alert('Selecione um usuário');
+      return;
+    }
+    if (!activity || !minutes || !date) {
+      alert('Preencha atividade, minutos e data.');
+      return;
+    }
     const calories = calculateCalories(activity, minutes, weight);
     const newAct = { id: Date.now(), date, activity, minutes: +minutes, calories };
     const updated = [...activities, newAct];
     setActivities(updated);
     localStorage.setItem(currentUser, JSON.stringify(updated));
-    // limpar campos
     setActivity('');
     setMinutes('');
   };
 
-  // **função de excluir atividade (requisito pedido)** — remove por id
+  // Remover atividade
   const removeActivity = (id) => {
     if (!confirm('Confirma exclusão dessa atividade?')) return;
     const updated = activities.filter(a => a.id !== id);
@@ -119,7 +135,7 @@ export default function Home() {
     if (currentUser) localStorage.setItem(currentUser, JSON.stringify(updated));
   };
 
-  // filtrar por período e ordenar decrescente (mais recente primeiro)
+  // Filtrar atividades por período
   const filteredActivities = useMemo(() => {
     const s = startDate ? new Date(startDate) : null;
     const e = endDate ? new Date(endDate) : null;
@@ -133,33 +149,34 @@ export default function Home() {
       .sort((a, b) => new Date(b.date) - new Date(a.date));
   }, [activities, startDate, endDate]);
 
-  // dados para gráfico diário (aplica filtro)
+  // Dados para gráfico diário
   const dailyChartData = useMemo(() => {
     const grouped = {};
     filteredActivities.forEach(a => {
       grouped[a.date] = (grouped[a.date] || 0) + a.calories;
     });
-    const labels = Object.keys(grouped).sort(); // labels em ordem crescente de data
+    const labels = Object.keys(grouped).sort();
     return {
       labels,
       datasets: [{
         label: 'Gasto diário (kcal)',
         data: labels.map(l => grouped[l]),
-        backgroundColor: '#7C3AED'
+        backgroundColor: '#a855f7',
+        borderRadius: 6,
+        borderSkipped: false,
       }]
     };
   }, [filteredActivities]);
 
-  // dados para gráfico mensal (barras acumuladas por mês)
+  // Dados para gráfico mensal
   const monthlyChartData = useMemo(() => {
     const grouped = {};
     filteredActivities.forEach(a => {
       const dt = new Date(a.date);
-      // chave "YYYY-MM" para ordenar corretamente
       const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
       grouped[key] = (grouped[key] || 0) + a.calories;
     });
-    const sortedKeys = Object.keys(grouped).sort(); // yyyy-mm ordenado
+    const sortedKeys = Object.keys(grouped).sort();
     const labels = sortedKeys.map(k => {
       const [y, m] = k.split('-');
       const d = new Date(y, parseInt(m, 10) - 1, 1);
@@ -170,132 +187,256 @@ export default function Home() {
       datasets: [{
         label: 'Gasto mensal (kcal)',
         data: sortedKeys.map(k => grouped[k]),
-        backgroundColor: '#7C3AED'
+        backgroundColor: '#a855f7',
+        borderRadius: 6,
+        borderSkipped: false,
       }]
     };
   }, [filteredActivities]);
 
-  // helpers UI simples
-  const handleCreateUserFromInput = (e) => {
-    if (e.key === 'Enter') {
-      addUser(e.target.value);
-      e.target.value = '';
+  // Calcular totais
+  const totalCalories = filteredActivities.reduce((sum, a) => sum + a.calories, 0);
+  const totalMinutes = filteredActivities.reduce((sum, a) => sum + a.minutes, 0);
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: true,
+    plugins: {
+      legend: {
+        display: true,
+        position: 'top',
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: {
+          callback: function(value) {
+            return value.toLocaleString();
+          }
+        }
+      }
     }
   };
 
   return (
-    <div style={{ padding: 20, maxWidth: 900, margin: 'auto', fontFamily: 'Arial, sans-serif' }}>
-      <h1 style={{ textAlign: 'center', color: '#7C3AED' }}>Cal — Controle de Calorias</h1>
-
-      {/* USUÁRIOS */}
-      <section style={{ marginTop: 20 }}>
-        <h3>Usuários</h3>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input placeholder="Novo usuário (pressione Enter)" onKeyDown={handleCreateUserFromInput} />
-          <button onClick={() => {
-            const name = prompt('Nome do usuário:');
-            if (name) addUser(name);
-          }}>Criar</button>
-        </div>
-        <ul>
-          {users.map(u => (
-            <li key={u.name} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-              <button onClick={() => {
-                setCurrentUser(u.name);
-                localStorage.setItem('currentUser', u.name);
-              }}>
-                {currentUser === u.name ? <b>{u.name}</b> : u.name}
-              </button>
-              <button onClick={() => deleteUser(u.name)} style={{ marginLeft: 8, color: 'red' }}>🗑️ Excluir usuário</button>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      {/* ÁREA DO USUÁRIO ATIVO */}
-      {currentUser ? (
-        <>
-          <h2 style={{ color: '#6B21A8', marginTop: 16 }}>Usuário ativo: {currentUser}</h2>
-
-          {/* CAMPOS DE LANÇAMENTO */}
-          <section style={{ marginTop: 12, display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
-            <input type="number" placeholder="Peso (kg)" value={weight} onChange={e => setWeight(e.target.value)} />
-            <input type="number" placeholder="Altura (cm)" value={height} onChange={e => setHeight(e.target.value)} />
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} />
-            <select value={activity} onChange={e => setActivity(e.target.value)}>
-              <option value="">Selecione atividade</option>
-              <option value="Padel">Padel</option>
-              <option value="Musculação">Musculação</option>
-              <option value="Corrida">Corrida</option>
-            </select>
-            <input type="number" placeholder="Minutos" value={minutes} onChange={e => setMinutes(e.target.value)} />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={handleAddActivity} style={{ background: '#10B981', color: '#fff', padding: '6px 10px' }}>Registrar</button>
-              <button onClick={() => {
-                if (confirm('Limpar todo o histórico visível?')) {
-                  setActivities([]);
-                  localStorage.setItem(currentUser, JSON.stringify([]));
-                }
-              }} style={{ background: '#EF4444', color: '#fff', padding: '6px 10px' }}>Limpar histórico</button>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      <Header />
+      
+      <main className="container py-8">
+        {/* Seção de Usuários */}
+        <section className="mb-12">
+          <h2 className="section-title">👥 Gerenciar Usuários</h2>
+          
+          <Card className="mb-6">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Input
+                placeholder="Nome do novo usuário"
+                value={newUserName}
+                onChange={(e) => setNewUserName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    addUser(newUserName);
+                  }
+                }}
+              />
+              <Button
+                variant="primary"
+                onClick={() => addUser(newUserName)}
+                className="sm:w-auto"
+              >
+                ➕ Criar Usuário
+              </Button>
             </div>
-          </section>
+          </Card>
 
-          {/* FILTRO DE PERÍODOS */}
-          <section style={{ marginTop: 18 }}>
-            <h4>Filtro de período</h4>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <div>
-                <label>Início</label><br />
-                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
-              </div>
-              <div>
-                <label>Fim</label><br />
-                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
-              </div>
-              <div style={{ alignSelf: 'end' }}>
-                <button onClick={() => { setStartDate(''); setEndDate(''); }}>Limpar filtro</button>
-              </div>
-            </div>
-          </section>
+          <UserList
+            users={users}
+            currentUser={currentUser}
+            onSelectUser={(name) => {
+              setCurrentUser(name);
+              localStorage.setItem('currentUser', name);
+            }}
+            onDeleteUser={deleteUser}
+          />
+        </section>
 
-          {/* GRÁFICOS - POSICIONADOS ACIMA DO HISTÓRICO */}
-          <section style={{ marginTop: 24 }}>
-            <h3>Gasto diário (barras)</h3>
-            <div style={{ background: '#fff', padding: 12, borderRadius: 6 }}>
-              <Bar data={dailyChartData} />
-            </div>
+        {/* Seção do Usuário Ativo */}
+        {currentUser ? (
+          <>
+            <section className="mb-12">
+              <h2 className="section-title">📊 Registrar Atividade</h2>
+              
+              <Card>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+                  <Input
+                    label="Peso (kg)"
+                    type="number"
+                    placeholder="Ex: 70"
+                    value={weight}
+                    onChange={(e) => setWeight(e.target.value)}
+                  />
+                  <Input
+                    label="Altura (cm)"
+                    type="number"
+                    placeholder="Ex: 180"
+                    value={height}
+                    onChange={(e) => setHeight(e.target.value)}
+                  />
+                  <Input
+                    label="Data"
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                  />
+                  <Select
+                    label="Atividade"
+                    value={activity}
+                    onChange={(e) => setActivity(e.target.value)}
+                    options={[
+                      { value: 'Padel', label: '🎾 Padel' },
+                      { value: 'Musculação', label: '💪 Musculação' },
+                      { value: 'Corrida', label: '🏃 Corrida' },
+                    ]}
+                  />
+                  <Input
+                    label="Minutos"
+                    type="number"
+                    placeholder="Ex: 60"
+                    value={minutes}
+                    onChange={(e) => setMinutes(e.target.value)}
+                  />
+                </div>
 
-            <h3 style={{ marginTop: 20 }}>Gasto mensal (barras acumuladas)</h3>
-            <div style={{ background: '#fff', padding: 12, borderRadius: 6 }}>
-              <Bar data={monthlyChartData} />
-            </div>
-          </section>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Button
+                    variant="success"
+                    onClick={handleAddActivity}
+                    className="flex-1"
+                  >
+                    ✓ Registrar Atividade
+                  </Button>
+                  <Button
+                    variant="danger"
+                    onClick={() => {
+                      if (confirm('Limpar todo o histórico visível?')) {
+                        setActivities([]);
+                        localStorage.setItem(currentUser, JSON.stringify([]));
+                      }
+                    }}
+                    className="flex-1"
+                  >
+                    🗑️ Limpar Histórico
+                  </Button>
+                </div>
+              </Card>
+            </section>
 
-          {/* HISTÓRICO - ORDEM DECRESCENTE (mais recente no topo) */}
-          <section style={{ marginTop: 24 }}>
-            <h3>Histórico de atividades</h3>
-            {filteredActivities.length === 0 ? (
-              <div>Sem atividades no período selecionado.</div>
-            ) : (
-              <ul>
-                {filteredActivities.map(a => (
-                  <li key={a.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
-                    <div>
-                      <div><strong>{a.date}</strong> — {a.activity}</div>
-                      <div style={{ fontSize: 13, color: '#555' }}>{a.minutes} min — {a.calories} kcal</div>
-                    </div>
-                    <div>
-                      <button onClick={() => removeActivity(a.id)} style={{ color: 'red' }}>Excluir</button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+            {/* Filtro de Período */}
+            <section className="mb-12">
+              <h3 className="subsection-title">🔍 Filtrar por Período</h3>
+              
+              <Card>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <Input
+                    label="Data Inicial"
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                  />
+                  <Input
+                    label="Data Final"
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                  />
+                  <div className="flex items-end">
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        setStartDate('');
+                        setEndDate('');
+                      }}
+                      className="w-full"
+                    >
+                      ✕ Limpar Filtro
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            </section>
+
+            {/* Estatísticas */}
+            {filteredActivities.length > 0 && (
+              <section className="mb-12">
+                <h3 className="subsection-title">📈 Resumo</h3>
+                <div className="grid-responsive">
+                  <Stats
+                    value={totalCalories}
+                    label="Total de Calorias"
+                    icon="🔥"
+                    color="purple"
+                  />
+                  <Stats
+                    value={totalMinutes}
+                    label="Total de Minutos"
+                    icon="⏱️"
+                    color="blue"
+                  />
+                  <Stats
+                    value={filteredActivities.length}
+                    label="Atividades"
+                    icon="💪"
+                    color="green"
+                  />
+                </div>
+              </section>
             )}
-          </section>
-        </>
-      ) : (
-        <div style={{ marginTop: 20, color: '#666' }}>Selecione ou crie um usuário para começar</div>
-      )}
+
+            {/* Gráficos */}
+            <section className="mb-12">
+              <h3 className="subsection-title">📊 Gasto Diário</h3>
+              <Card>
+                <div className="h-80">
+                  <Bar data={dailyChartData} options={chartOptions} />
+                </div>
+              </Card>
+            </section>
+
+            <section className="mb-12">
+              <h3 className="subsection-title">📅 Gasto Mensal</h3>
+              <Card>
+                <div className="h-80">
+                  <Bar data={monthlyChartData} options={chartOptions} />
+                </div>
+              </Card>
+            </section>
+
+            {/* Histórico de Atividades */}
+            <section className="mb-12">
+              <h3 className="subsection-title">📋 Histórico de Atividades</h3>
+              <ActivityList
+                activities={filteredActivities}
+                onRemove={removeActivity}
+              />
+            </section>
+          </>
+        ) : (
+          <div className="text-center py-16">
+            <p className="text-2xl text-gray-500 mb-4">👤 Nenhum usuário selecionado</p>
+            <p className="text-gray-400">Crie ou selecione um usuário para começar</p>
+          </div>
+        )}
+      </main>
+
+      {/* Footer */}
+      <footer className="bg-gray-800 text-gray-300 py-8 mt-16">
+        <div className="container text-center">
+          <p className="text-sm">
+            Cal © 2026 — Controle de Calorias | Desenvolvido com ❤️
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }
